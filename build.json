@@ -1,0 +1,14 @@
+{
+  "id": "20214d312cafac32",
+  "files": {
+    "bridge.js": "25cae374f5d6dcaa41d3d6fd33be221bd04325332615e0dbfb6b4724c6a38f7d",
+    "far-corner.wasm": "0e7a0522f2a8ceed9ce7ef81518486bb8bde977778b2db407b59fad577d70b78",
+    "icon-180.png": "b8cf7c8fe53d9cdc2073aef9b247ad55a9f2999058dd7c859698a5927cfc7528",
+    "icon-192.png": "cc81e2927e4dc3189f5eeed168655b79014c1348ab79d23dd6c7fa3f409933c0",
+    "icon-512.png": "e0901758de6cfe39dabf5de8a3e1aa47ade492ebccb4e6eb824a0b50f2337aa0",
+    "icon-maskable-512.png": "b2dba1acb4e6795f672afd3dbfc6f5f88b21eabda054fcc869e15ffa44bba61e",
+    "index.html": "f5897723f6b1986327f7d2bb2af3d5171c1944b43f1f934d9c705c063219b959",
+    "manifest.webmanifest": "695d328c9f4127884107466cad995e36794d37fe47015ae13d031015e71a0fc5",
+    "odin.js": "51d11ebfdf4dfc58225828589ed135eb635d3fa62fedd9d6d95286cecf7b39d9"
+  }
+}

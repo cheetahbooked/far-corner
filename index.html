@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Phone first: no user zoom, no scroll, safe-area aware. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="Practice drawing boxes in perspective, one-handed on your phone.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#121214">
+<!-- Installable: the manifest for Chrome and Android, the apple- lines for iOS,
+     which reads its own. Installed on an iPhone the page runs full screen under
+     a translucent status bar, and the canvas keeps to the safe area (below).
+     The manifest has no "id": an id is resolved against the origin, not the
+     manifest's folder, so "./" would name the root of a github.io origin that
+     every site of its owner shares. Without one the id is start_url, the
+     folder the app is in. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icon-180.png" sizes="180x180">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Far Corner">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Far Corner</title>
+<style>
+	/* Colors are app/palette.odin's: PAL_BACKGROUND, PAL_TEXT, PAL_TEXT_DIM
+	   and PAL_REFUSAL. */
+	html, body {
+		margin: 0;
+		padding: 0;
+		height: 100%;
+		overflow: hidden;
+		background: #121214;
+		color: #e8e6e1;
+		font: 14px/1.4 system-ui, sans-serif;
+		/* The drawing area must own every gesture: no pan, no pinch-zoom,
+		   no pull-to-refresh, no double-tap zoom, no long-press selection. */
+		overscroll-behavior: none;
+		touch-action: none;
+		-webkit-user-select: none;
+		user-select: none;
+		-webkit-tap-highlight-color: transparent;
+	}
+	/* Inside the safe area, so that the controls sit clear of the notch and
+	   the home indicator; the body's background fills the insets. The app
+	   sizes itself from this box and reads pointers relative to it. */
+	#far-corner-canvas {
+		display: block;
+		position: fixed;
+		top: env(safe-area-inset-top, 0px);
+		left: env(safe-area-inset-left, 0px);
+		width: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+		height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+		touch-action: none;
+	}
+	#boot {
+		position: fixed;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		background: #121214;
+		transition: opacity .2s;
+	}
+	#boot[hidden] { display: none; }
+	#boot.gone { opacity: 0; pointer-events: none; }
+	#boot .msg { color: #9a9da6 }
+	#boot .err { color: #cc854d; max-width: 32ch; text-align: center }
+</style>
+</head>
+<body>
+	<canvas id="far-corner-canvas"></canvas>
+	<div id="boot"><div class="msg">Loading…</div></div>
+
+	<script>
+	// The canvas's box can change without a window resize (safe-area insets
+	// that settle after the first layout), so a change of the box is told to
+	// the app as one. The first observation is the box it starts with.
+	if (window.ResizeObserver) {
+		let seen = null;
+		new ResizeObserver(([e]) => {
+			const size = e.contentRect.width + "x" + e.contentRect.height;
+			if (seen !== null && size !== seen) window.dispatchEvent(new Event("resize"));
+			seen = size;
+		}).observe(document.getElementById("far-corner-canvas"));
+	}
+	</script>
+	<script src="odin.js"></script>
+	<script src="bridge.js"></script>
+	<script>
+	const started = (async () => {
+		const boot = document.getElementById("boot");
+		const fail = (msg) => {
+			boot.innerHTML = '<div class="err"></div>';
+			boot.querySelector(".err").textContent = msg;
+			boot.classList.remove("gone");
+		};
+
+		if (!document.createElement("canvas").getContext("webgl2") &&
+		    !document.createElement("canvas").getContext("webgl")) {
+			fail("Far Corner can't draw in this browser, which has no WebGL. Try an up-to-date Chrome, Safari or Firefox.");
+			return;
+		}
+
+		try {
+			// Pass a <pre> as the second argument to mirror Odin's stdout into
+			// the page; null sends it to the devtools console only.
+			// The storage bridge (bridge.js) reads and writes wasm memory, so it
+			// and the runtime share one memory interface.
+			const mem = new window.odin.WasmMemoryInterface();
+			// The stored reps are read in before the module starts: wasm
+			// imports are synchronous and IndexedDB is not (bridge.js).
+			const store = await window.farCornerStore.open();
+			await window.odin.runWasm("far-corner.wasm", null, window.farCornerBridge(mem, store), mem, 4);
+			boot.classList.add("gone");
+			setTimeout(() => boot.hidden = true, 250);
+		} catch (e) {
+			console.error(e);
+			fail("Far Corner couldn't start. Reload the page to try again. (" + e.message + ")");
+		}
+	})();
+	</script>
+	<script>
+	// The service worker (sw.js), which keeps the app's files so that it starts
+	// with no network. Registered once the app is up, or has failed to come up,
+	// so that on a first visit its download of every file does not compete with
+	// the page's own; the page that registers it is not served by it, the next
+	// launch is. A failed start is no reason to skip it: a worker checks what it
+	// keeps, which the HTTP cache that may have caused the failure does not.
+	//
+	// None over plain http to a LAN address, which is not a secure context, so
+	// the phone on the dev machine's Wi-Fi never has one. Nor on this machine
+	// unless the URL has ?dev=sw (tools/headless/pwa_check.py): a worker would
+	// go on serving the build it has after ./build.ps1 made a new one. Without
+	// the flag one left from an earlier run is removed, with its builds.
+	started.finally(async () => {
+		if (!("serviceWorker" in navigator)) return;
+		const dev = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+		try {
+			if (!dev || new URLSearchParams(location.search).getAll("dev").includes("sw")) {
+				await navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
+				return;
+			}
+			const reg = await navigator.serviceWorker.getRegistration();
+			const worker = reg && (reg.active || reg.waiting || reg.installing);
+			if (!worker || worker.scriptURL !== new URL("sw.js", location.href).href) return;
+			await reg.unregister();
+			const ours = "dabo " + new URL(reg.scope).pathname + " "; // sw.js's cache names
+			for (const name of await caches.keys()) if (name.startsWith(ours)) await caches.delete(name);
+			console.info("far corner: removed the service worker (no ?dev=sw on a dev host); the next load comes from the network");
+		} catch (e) {
+			// Offline, the update check behind register() fails; the worker
+			// already installed goes on serving.
+			console.warn("far corner: service worker:", e.message);
+		}
+	});
+	</script>
+</body>
+</html>
